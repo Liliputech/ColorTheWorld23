@@ -1,0 +1,3 @@
+[submodule "include/Adafruit_TCS34725"]
+	path = include/Adafruit_TCS34725
+	url = https://github.com/Adafruit/Adafruit_TCS34725
