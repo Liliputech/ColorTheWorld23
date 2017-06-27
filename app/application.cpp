@@ -31,6 +31,7 @@ void setup() {
 	Serial.begin(115200);
 	strip.begin();
 	setPixels(127,127,127);
+	Wire.pins(5,4); // Added for pin compatibility with Wemos D1 documentation
 	if (tcs.begin()) Serial.println("Found sensor");
 	// thanks PhilB for this gamma table!
 	// it helps convert RGB colors to what humans see
