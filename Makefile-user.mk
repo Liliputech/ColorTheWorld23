@@ -37,5 +37,5 @@ MODULES += include/Adafruit_TCS34725
 
 ## SPIFFS options
 #DISABLE_SPIFFS = 1
-# SPIFF_FILES = files
+SPIFF_FILES = web/build
 
