@@ -129,6 +129,7 @@ void setPixels(float r, float g, float b) {
 	}
 }
 
+
 void onIndex(HttpRequest &request, HttpResponse &response)
 {
 	TemplateFileStream *tmpl = new TemplateFileStream("index.html");
@@ -138,7 +139,7 @@ void onIndex(HttpRequest &request, HttpResponse &response)
 
 void onIpConfig(HttpRequest &request, HttpResponse &response)
 {
-	if (request.method == HTTP_POST)
+	if (request.getRequestMethod() == RequestMethod::POST)
 	{
 		AppSettings.dhcp = request.getPostParameter("dhcp") == "1";
 		AppSettings.ip = request.getPostParameter("ip");
@@ -214,7 +215,7 @@ void onAjaxNetworkList(HttpRequest &request, HttpResponse &response)
 	}
 
 	response.setAllowCrossDomainOrigin("*");
-	response.sendDataStream(stream, MIME_JSON);
+	response.sendJsonObject(stream);
 }
 
 void makeConnection()
@@ -268,7 +269,7 @@ void onAjaxConnect(HttpRequest &request, HttpResponse &response)
 		json["error"] = WifiStation.getConnectionStatusName();
 
 	response.setAllowCrossDomainOrigin("*");
-	response.sendDataStream(stream, MIME_JSON);
+	response.sendJsonObject(stream);
 }
 
 void startWebServer()
@@ -292,8 +293,7 @@ void networkScanCompleted(bool succeeded, BssList list)
 	networks.sort([](const BssInfo& a, const BssInfo& b){ return b.rssi - a.rssi; } );
 }
 
-
-int onDataSent(HttpConnection& client, bool successful)
+void onDataSent(HttpClient& client, bool successful)
 {
 	if (successful)
 		Serial.println("Success sent");
@@ -309,12 +309,10 @@ int onDataSent(HttpConnection& client, bool successful)
 		if (intVal == 0)
 			Serial.println("Sensor value wasn't accepted. May be we need to wait a little?");
 	}
-
-	return 0;
 }
 
-void sendData()
-{
+void sendData() {
+	if (colorMap.isProcessing()) return;
 	colorMap.downloadString(
 		AppSettings.url + 
 		"?id=" + AppSettings.nickname + 
