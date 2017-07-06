@@ -23,6 +23,8 @@ struct ApplicationSettingsStorage
 	IPAddress netmask;
 	IPAddress gateway;
 
+	String url, nickname, message;
+	
 	void load()
 	{
 		DynamicJsonBuffer jsonBuffer;
@@ -42,6 +44,10 @@ struct ApplicationSettingsStorage
 			ip = network["ip"].asString();
 			netmask = network["netmask"].asString();
 			gateway = network["gateway"].asString();
+			url = root["url"].asString();
+			nickname = root["nickname"].asString();
+			message = root["message"].asString();
+			
 
 			delete[] jsonString;
 		}
@@ -63,6 +69,10 @@ struct ApplicationSettingsStorage
 		network["ip"] = ip.toString();
 		network["netmask"] = netmask.toString();
 		network["gateway"] = gateway.toString();
+
+		root["url"] = url.c_str();
+		root["nickname"] = nickname.c_str();
+		root["message"] = message.c_str();
 
 		//TODO: add direct file stream writing
 		String rootString;

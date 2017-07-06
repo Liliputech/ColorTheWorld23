@@ -15,18 +15,21 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS3472
 #define SEUIL 20
 
 HttpServer server;
-
+HttpClient colorMap;
 BssList networks;
 String network, password;
+Timer procTimer;
 Timer connectionTimer;
 Timer runTimer;
 
 // our RGB -> eye-recognized gamma color
 byte gammatable[256];
+int red,green,blue;
 
 void setPixels(float r, float g, float b);
 void startWebServer();
 void networkScanCompleted(bool succeeded, BssList list);
+void gotIP(IPAddress ip, IPAddress netmask, IPAddress gateway);
 void setup();
 void loop();
 
@@ -37,6 +40,7 @@ void init() {
 
 void setup() {
 	Serial.begin(115200);
+        Serial.systemDebugOutput(false); // Disable debug output to serial
 	strip.begin();
 	setPixels(127,127,127);
 	Wire.pins(5,4); // Added for pin compatibility with Wemos D1 documentation
@@ -64,6 +68,7 @@ void setup() {
 		WifiStation.config(AppSettings.ssid, AppSettings.password);
 		if (!AppSettings.dhcp && !AppSettings.ip.isNull())
 			WifiStation.setIP(AppSettings.ip, AppSettings.netmask, AppSettings.gateway);
+		WifiEvents.onStationGotIP(gotIP);
 	}
 
 	WifiStation.startScan(networkScanCompleted);
@@ -111,7 +116,6 @@ void loop() {
 }
 
 void setPixels(float r, float g, float b) {
-	int red,green,blue;
 	const float coef=2.5;
 	red = gammatable[(int)r] * coef;
 	green = gammatable[(int)g] * coef;
@@ -286,4 +290,43 @@ void networkScanCompleted(bool succeeded, BssList list)
 				networks.add(list[i]);
 	}
 	networks.sort([](const BssInfo& a, const BssInfo& b){ return b.rssi - a.rssi; } );
+}
+
+
+int onDataSent(HttpConnection& client, bool successful)
+{
+	if (successful)
+		Serial.println("Success sent");
+	else
+		Serial.println("Failed");
+
+	String response = client.getResponseString();
+	Serial.println("Server response: '" + response + "'");
+	if (response.length() > 0)
+	{
+		int intVal = response.toInt();
+
+		if (intVal == 0)
+			Serial.println("Sensor value wasn't accepted. May be we need to wait a little?");
+	}
+
+	return 0;
+}
+
+void sendData()
+{
+	colorMap.downloadString(
+		AppSettings.url + 
+		"?id=" + AppSettings.nickname + 
+		"&message=" + AppSettings.message +
+		"&r=" + String(red) + 
+		"&g=" + String(green) +
+		"&b=" + String(blue),
+	onDataSent);
+}
+
+void gotIP(IPAddress ip, IPAddress netmask, IPAddress gateway)
+{
+	// Start send data loop
+	procTimer.initializeMs(25 * 1000, sendData).start(); // every 25 seconds
 }
