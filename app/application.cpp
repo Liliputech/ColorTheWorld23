@@ -58,10 +58,13 @@ void setup() {
 	}
 
 	spiffs_mount(); // Mount file system, in order to work with files
+	Serial.println("FileSystem OK");
 
 	AppSettings.load();
+	Serial.println("Settings loaded");
 
 	WifiStation.enable(true);
+	Serial.println("Wifi enabled");
 
 	if (AppSettings.exist())
 	{
@@ -69,6 +72,7 @@ void setup() {
 		if (!AppSettings.dhcp && !AppSettings.ip.isNull())
 			WifiStation.setIP(AppSettings.ip, AppSettings.netmask, AppSettings.gateway);
 		WifiEvents.onStationGotIP(gotIP);
+		Serial.println("Network configuration restored");
 	}
 
 	WifiStation.startScan(networkScanCompleted);
