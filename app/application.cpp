@@ -11,10 +11,12 @@
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 // Define ColorSensor
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_101MS, TCS34725_GAIN_4X);
 #define SEUIL 20
 
 HttpServer server;
+FTPServer ftp;
+
 HttpClient colorMap;
 BssList networks;
 String network, password;
@@ -24,70 +26,23 @@ Timer runTimer;
 
 // our RGB -> eye-recognized gamma color
 byte gammatable[256];
-int red,green,blue;
+uint16_t red,green,blue,clear;
 
-void setPixels(float r, float g, float b);
-void startWebServer();
-void networkScanCompleted(bool succeeded, BssList list);
-void gotIP(IPAddress ip, IPAddress netmask, IPAddress gateway);
-void setup();
-void loop();
+void setPixels(float r, float g, float b) {
+	const float coef=2.5;
+	red = gammatable[(int)r] * coef;
+	green = gammatable[(int)g] * coef;
+	blue = gammatable[(int)b] * coef;
 
-void init() {
-	setup();
-	runTimer.initializeMs(1000,loop).start();  
-}
 
-void setup() {
-	Serial.begin(115200);
-        Serial.systemDebugOutput(false); // Disable debug output to serial
-	strip.begin();
-	setPixels(127,127,127);
-	Wire.pins(5,4); // Added for pin compatibility with Wemos D1 documentation
-	if (tcs.begin()) Serial.println("Found sensor");
-	// thanks PhilB for this gamma table!
-	// it helps convert RGB colors to what humans see
-	for (int i=0; i<256; i++) {
-		float x = i;
-		x /= 255;
-		x = pow(x, 2.5);
-		x *= 255;
-
-		gammatable[i] = x;
-		Serial.println(gammatable[i]);
+	for(int i=0;i<NUMPIXELS;i++){
+		strip.setPixelColor(i,strip.Color(red,green,blue));
+		strip.show();
+		delay(5);
 	}
-
-	spiffs_mount(); // Mount file system, in order to work with files
-	Serial.println("FileSystem OK");
-
-	AppSettings.load();
-	Serial.println("Settings loaded");
-
-	WifiStation.enable(true);
-	Serial.println("Wifi enabled");
-
-	if (AppSettings.exist())
-	{
-		WifiStation.config(AppSettings.ssid, AppSettings.password);
-		if (!AppSettings.dhcp && !AppSettings.ip.isNull())
-			WifiStation.setIP(AppSettings.ip, AppSettings.netmask, AppSettings.gateway);
-		WifiEvents.onStationGotIP(gotIP);
-		Serial.println("Network configuration restored");
-	}
-
-	WifiStation.startScan(networkScanCompleted);
-
-	// Start AP for configuration
-	WifiAccessPoint.enable(true);
-	WifiAccessPoint.config("Sming Configuration", "", AUTH_OPEN);
-
-	// Run WEB server on system ready
-	System.onReady(startWebServer);
 }
 
 void loop() {
-	uint16_t clear, red, green, blue;
-
 	tcs.setInterrupt(false);      // turn on LED
 
 	delay(60);  // takes 50ms to read 
@@ -118,21 +73,6 @@ void loop() {
 		Pr=r; Pg=g; Pb=b;
 	}
 }
-
-void setPixels(float r, float g, float b) {
-	const float coef=2.5;
-	red = gammatable[(int)r] * coef;
-	green = gammatable[(int)g] * coef;
-	blue = gammatable[(int)b] * coef;
-
-
-	for(int i=0;i<NUMPIXELS;i++){
-		strip.setPixelColor(i,strip.Color(red,green,blue));
-		strip.show();
-		delay(5);
-	}
-}
-
 
 void onIndex(HttpRequest &request, HttpResponse &response)
 {
@@ -286,6 +226,23 @@ void startWebServer()
 	server.setDefaultHandler(onFile);
 }
 
+void startFTP()
+{
+        if (!fileExist("index.html"))
+                fileSetContent("index.html", "<h3>Please connect to FTP and upload files from folder 'web/build' (details in code)</h3>");
+
+        // Start FTP server
+        ftp.listen(21);
+        ftp.addUser("me", "123"); // FTP account
+}
+
+// Will be called when system initialization was completed
+void startServers()
+{
+        startFTP();
+        startWebServer();
+}
+
 void networkScanCompleted(bool succeeded, BssList list)
 {
 	if (succeeded)
@@ -325,10 +282,62 @@ void sendData() {
 		"&g=" + String(green) +
 		"&b=" + String(blue),
 	onDataSent);
+	Serial.println("HttpRequest : Color data sent!");
 }
 
 void gotIP(IPAddress ip, IPAddress netmask, IPAddress gateway)
 {
 	// Start send data loop
 	procTimer.initializeMs(25 * 1000, sendData).start(); // every 25 seconds
+}
+
+void init() {
+	spiffs_mount(); // Mount file system, in order to work with files
+
+	Serial.begin(SERIAL_BAUD_RATE); //115200 by default
+        Serial.systemDebugOutput(true); // Enable debug output to serial
+	Serial.println("FileSystem OK");
+	AppSettings.load();
+	Serial.println("Settings loaded");
+
+	WifiStation.enable(true);
+	Serial.println("Wifi enabled");
+
+	if (AppSettings.exist())
+	{
+		WifiStation.config(AppSettings.ssid, AppSettings.password);
+		if (!AppSettings.dhcp && !AppSettings.ip.isNull())
+			WifiStation.setIP(AppSettings.ip, AppSettings.netmask, AppSettings.gateway);
+		//WifiEvents.onStationGotIP(gotIP);
+		Serial.println("Network configuration restored");
+	}
+
+	WifiStation.startScan(networkScanCompleted);
+
+	// Start AP for configuration
+	WifiAccessPoint.enable(true);
+	WifiAccessPoint.config("ColorTheWorld", "", AUTH_OPEN);
+	Serial.println("Configuration AP started");
+
+	// Run WEB server on system ready
+	System.onReady(startServers);
+/*
+	strip.begin();
+	setPixels(127,127,127);
+	Wire.pins(5,4); // Added for pin compatibility with Wemos D1 documentation
+	if (tcs.begin()) {
+		Serial.println("Found sensor");
+		runTimer.initializeMs(1000,loop).start();  
+	}
+	// thanks PhilB for this gamma table!
+	// it helps convert RGB colors to what humans see
+	for (int i=0; i<256; i++) {
+		float x = i;
+		x /= 255;
+		x = pow(x, 2.5);
+		x *= 255;
+
+		gammatable[i] = x;
+	}
+//*/
 }
